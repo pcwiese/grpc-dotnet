@@ -114,7 +114,7 @@ namespace Grpc.AspNetCore.FunctionalTests.Infrastructure
             _endpointDataSource.AddEndpoints(endpoints);
         }
 
-        private Method<TRequest, TResponse> CreateMethod<TRequest, TResponse>(MethodType methodType, string methodName)
+        internal static Method<TRequest, TResponse> CreateMethod<TRequest, TResponse>(MethodType methodType, string methodName)
             where TRequest : class, IMessage, new()
             where TResponse : class, IMessage, new()
         {
@@ -126,7 +126,7 @@ namespace Grpc.AspNetCore.FunctionalTests.Infrastructure
                 CreateMarshaller<TResponse>());
         }
 
-        private Marshaller<TMessage> CreateMarshaller<TMessage>()
+        private static Marshaller<TMessage> CreateMarshaller<TMessage>()
               where TMessage : class, IMessage, new()
         {
             return new Marshaller<TMessage>(

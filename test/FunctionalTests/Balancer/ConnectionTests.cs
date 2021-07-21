@@ -47,6 +47,47 @@ namespace Grpc.AspNetCore.FunctionalTests.Balancer
     {
 #if NET5_0_OR_GREATER
         [Test]
+        public void ResolvingTwoLoadBalancedClientsUsingClientFactory()
+        {
+            var services = new ServiceCollection();
+
+            services.AddSingleton<ResolverFactory>(new StaticResolverFactory(_ => new[]
+            {
+                new DnsEndPoint("localhost", 50051),
+            }));
+
+            // TestClient requires a Method registration.
+            services.AddSingleton(DynamicGrpcServiceRegistry.CreateMethod<HelloRequest, HelloReply>(MethodType.Unary, "unused" ?? Guid.NewGuid().ToString()));
+
+            // Register the client using the Factory
+            services
+                .AddGrpcClient<TestClient<HelloRequest, HelloReply>>(
+                    o =>
+                    {
+                        o.Address = new Uri("static:///localhost");
+                    })
+                .ConfigureChannel(
+                    o =>
+                    {
+                        o.Credentials = global::Grpc.Core.ChannelCredentials.Insecure;
+                        o.DisableResolverServiceConfig = true;
+                        o.ServiceProvider = services.BuildServiceProvider();
+                        o.ServiceConfig = new ServiceConfig
+                        {
+                            LoadBalancingConfigs = { new RoundRobinConfig() }
+                        };
+                    });
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            // 1st resolution succeeds
+            var client1 = serviceProvider.GetRequiredService<TestClient<HelloRequest, HelloReply>>();
+
+            // 2nd does not.
+            var client2 = serviceProvider.GetRequiredService<TestClient<HelloRequest, HelloReply>>();
+        }
+
+        [Test]
         public async Task Active_UnaryCall_MultipleStreams_UnavailableAddress_FallbackToWorkingAddress()
         {
             // Ignore errors
