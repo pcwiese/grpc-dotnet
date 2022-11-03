@@ -23,71 +23,71 @@ namespace Grpc.Net.Client.Internal
 {
     internal static class GrpcCallLog
     {
-        private static readonly Action<ILogger, MethodType, Uri, Exception?> _startingCall =
-            LoggerMessage.Define<MethodType, Uri>(LogLevel.Debug, new EventId(1, "StartingCall"), "Starting gRPC call. Method type: '{MethodType}', URI: '{Uri}'.");
+        private static readonly Action<ILogger, Guid, Guid, int, MethodType, Uri, Exception?> _startingCall =
+            LoggerMessage.Define<Guid, Guid, int, MethodType, Uri>(LogLevel.Debug, new EventId(1, "StartingCall"), "Starting gRPC call. CallId: '{CallId}', ChannelId: '{ChannelId}', Attempt: '{Attempt}', Method type: '{MethodType}', URI: '{Uri}'.");
 
-        private static readonly Action<ILogger, Exception?> _responseHeadersReceived =
-            LoggerMessage.Define(LogLevel.Trace, new EventId(2, "ResponseHeadersReceived"), "Response headers received.");
+        private static readonly Action<ILogger, Guid, Exception?> _responseHeadersReceived =
+            LoggerMessage.Define<Guid>(LogLevel.Trace, new EventId(2, "ResponseHeadersReceived"), "Response headers received. CallId: '{CallId}'");
 
-        private static readonly Action<ILogger, StatusCode, string, Exception?> _grpcStatusError =
-            LoggerMessage.Define<StatusCode, string>(LogLevel.Information, new EventId(3, "GrpcStatusError"), "Call failed with gRPC error status. Status code: '{StatusCode}', Message: '{StatusMessage}'.");
+        private static readonly Action<ILogger, Guid, StatusCode, string, Exception?> _grpcStatusError =
+            LoggerMessage.Define<Guid, StatusCode, string>(LogLevel.Information, new EventId(3, "GrpcStatusError"), "Call failed with gRPC error status. CallId: '{CallId}', Status code: '{StatusCode}', Message: '{StatusMessage}'.");
 
-        private static readonly Action<ILogger, Exception?> _finishedCall =
-            LoggerMessage.Define(LogLevel.Debug, new EventId(4, "FinishedCall"), "Finished gRPC call.");
+        private static readonly Action<ILogger, Guid, Exception?> _finishedCall =
+            LoggerMessage.Define<Guid>(LogLevel.Debug, new EventId(4, "FinishedCall"), "Finished gRPC call. CallId: '{CallId}'");
 
-        private static readonly Action<ILogger, TimeSpan, Exception?> _startingDeadlineTimeout =
-            LoggerMessage.Define<TimeSpan>(LogLevel.Trace, new EventId(5, "StartingDeadlineTimeout"), "Starting deadline timeout. Duration: {DeadlineTimeout}.");
+        private static readonly Action<ILogger, Guid, TimeSpan, Exception?> _startingDeadlineTimeout =
+            LoggerMessage.Define<Guid, TimeSpan>(LogLevel.Trace, new EventId(5, "StartingDeadlineTimeout"), "Starting deadline timeout. CallId: '{CallId}', Duration: {DeadlineTimeout}.");
 
-        private static readonly Action<ILogger, Exception?> _errorStartingCall =
-            LoggerMessage.Define(LogLevel.Error, new EventId(6, "ErrorStartingCall"), "Error starting gRPC call.");
+        private static readonly Action<ILogger, Guid, Exception?> _errorStartingCall =
+            LoggerMessage.Define<Guid>(LogLevel.Error, new EventId(6, "ErrorStartingCall"), "Error starting gRPC call. CallId: '{CallId}'");
 
-        private static readonly Action<ILogger, Exception?> _deadlineExceeded =
-            LoggerMessage.Define(LogLevel.Warning, new EventId(7, "DeadlineExceeded"), "gRPC call deadline exceeded.");
+        private static readonly Action<ILogger, Guid, Exception?> _deadlineExceeded =
+            LoggerMessage.Define<Guid>(LogLevel.Warning, new EventId(7, "DeadlineExceeded"), "gRPC call deadline exceeded. CallId: '{CallId}'");
 
-        private static readonly Action<ILogger, Exception?> _canceledCall =
-            LoggerMessage.Define(LogLevel.Debug, new EventId(8, "CanceledCall"), "gRPC call canceled.");
+        private static readonly Action<ILogger, Guid, Exception?> _canceledCall =
+            LoggerMessage.Define<Guid>(LogLevel.Debug, new EventId(8, "CanceledCall"), "gRPC call canceled. CallId: '{CallId}'");
 
-        private static readonly Action<ILogger, Exception?> _messageNotReturned =
-            LoggerMessage.Define(LogLevel.Error, new EventId(9, "MessageNotReturned"), "Message not returned from unary or client streaming call.");
+        private static readonly Action<ILogger, Guid, Exception?> _messageNotReturned =
+            LoggerMessage.Define<Guid>(LogLevel.Error, new EventId(9, "MessageNotReturned"), "Message not returned from unary or client streaming call. CallId: '{CallId}'");
 
-        private static readonly Action<ILogger, Exception?> _errorValidatingResponseHeaders =
-            LoggerMessage.Define(LogLevel.Error, new EventId(10, "ErrorValidatingResponseHeaders"), "Error validating response headers.");
+        private static readonly Action<ILogger, Guid, Exception?> _errorValidatingResponseHeaders =
+            LoggerMessage.Define<Guid>(LogLevel.Error, new EventId(10, "ErrorValidatingResponseHeaders"), "Error validating response headers. CallId: '{CallId}'");
 
-        private static readonly Action<ILogger, Exception?> _errorFetchingGrpcStatus =
-            LoggerMessage.Define(LogLevel.Error, new EventId(11, "ErrorFetchingGrpcStatus"), "Error fetching gRPC status.");
+        private static readonly Action<ILogger, Guid, Exception?> _errorFetchingGrpcStatus =
+            LoggerMessage.Define<Guid>(LogLevel.Error, new EventId(11, "ErrorFetchingGrpcStatus"), "Error fetching gRPC status. CallId: '{CallId}'");
 
         private static readonly Action<ILogger, Exception?> _callCredentialsNotUsed =
             LoggerMessage.Define(LogLevel.Warning, new EventId(12, "CallCredentialsNotUsed"), "The configured CallCredentials were not used because the call does not use TLS.");
 
-        private static readonly Action<ILogger, Exception?> _readingMessage =
-            LoggerMessage.Define(LogLevel.Debug, new EventId(13, "ReadingMessage"), "Reading message.");
+        private static readonly Action<ILogger, Guid, int, Exception?> _readingMessage =
+            LoggerMessage.Define<Guid, int>(LogLevel.Debug, new EventId(13, "ReadingMessage"), "Reading message. CallId: '{CallId}', MessageId: '{MessageId}'.");
 
-        private static readonly Action<ILogger, Exception?> _noMessageReturned =
-            LoggerMessage.Define(LogLevel.Trace, new EventId(14, "NoMessageReturned"), "No message returned.");
+        private static readonly Action<ILogger, Guid, int, Exception?> _noMessageReturned =
+            LoggerMessage.Define<Guid, int>(LogLevel.Trace, new EventId(14, "NoMessageReturned"), "No message returned. CallId: '{CallId}', MessageId: '{MessageId}'.");
 
-        private static readonly Action<ILogger, int, Type, Exception?> _deserializingMessage =
-            LoggerMessage.Define<int, Type>(LogLevel.Trace, new EventId(15, "DeserializingMessage"), "Deserializing {MessageLength} byte message to '{MessageType}'.");
+        private static readonly Action<ILogger, Guid, int, int, Type, Exception?> _deserializingMessage =
+            LoggerMessage.Define<Guid, int, int, Type>(LogLevel.Trace, new EventId(15, "DeserializingMessage"), "CallId: '{CallId}', MessageId: '{MessageId}', Deserializing {MessageLength} byte message to '{MessageType}'.");
 
-        private static readonly Action<ILogger, Exception?> _receivedMessage =
-            LoggerMessage.Define(LogLevel.Trace, new EventId(16, "ReceivedMessage"), "Received message.");
+        private static readonly Action<ILogger, Guid, int, int, Type, Exception?> _receivedMessage =
+            LoggerMessage.Define<Guid, int, int, Type>(LogLevel.Trace, new EventId(16, "ReceivedMessage"), "Received message. CallId: '{CallId}', MessageId: '{MessageId}', Length: '{MessageLength}', Type: '{MessageType}'.");
 
-        private static readonly Action<ILogger, Exception> _errorReadingMessage =
-            LoggerMessage.Define(LogLevel.Information, new EventId(17, "ErrorReadingMessage"), "Error reading message.");
+        private static readonly Action<ILogger, Guid, int, Exception> _errorReadingMessage =
+            LoggerMessage.Define<Guid, int>(LogLevel.Information, new EventId(17, "ErrorReadingMessage"), "Error reading message. CallId: '{CallId}', MessageId: '{MessageId}'.");
 
-        private static readonly Action<ILogger, Exception?> _sendingMessage =
-            LoggerMessage.Define(LogLevel.Debug, new EventId(18, "SendingMessage"), "Sending message.");
+        private static readonly Action<ILogger, Guid, int, Exception?> _sendingMessage =
+            LoggerMessage.Define<Guid, int>(LogLevel.Debug, new EventId(18, "SendingMessage"), "Sending message. CallId: '{CallId}', MessageId: '{MessageId}'.");
 
-        private static readonly Action<ILogger, Exception?> _messageSent =
-            LoggerMessage.Define(LogLevel.Trace, new EventId(19, "MessageSent"), "Message sent.");
+        private static readonly Action<ILogger, Guid, int, Exception?> _messageSent =
+            LoggerMessage.Define<Guid, int>(LogLevel.Trace, new EventId(19, "MessageSent"), "Message sent. CallId: '{CallId}', MessageId: '{MessageId}'.");
 
-        private static readonly Action<ILogger, Exception> _errorSendingMessage =
-            LoggerMessage.Define(LogLevel.Information, new EventId(20, "ErrorSendingMessage"), "Error sending message.");
+        private static readonly Action<ILogger, Guid, int, Exception> _errorSendingMessage =
+            LoggerMessage.Define<Guid, int>(LogLevel.Information, new EventId(20, "ErrorSendingMessage"), "Error sending message. CallId: '{CallId}', MessageId: '{MessageId}'.");
 
-        private static readonly Action<ILogger, Type, int, Exception?> _serializedMessage =
-            LoggerMessage.Define<Type, int>(LogLevel.Trace, new EventId(21, "SerializedMessage"), "Serialized '{MessageType}' to {MessageLength} byte message.");
+        private static readonly Action<ILogger, Guid, Type, int, Exception?> _serializedMessage =
+            LoggerMessage.Define<Guid, Type, int>(LogLevel.Trace, new EventId(21, "SerializedMessage"), "CallId: '{CallId}'. Serialized '{MessageType}' to {MessageLength} byte message.");
 
-        private static readonly Action<ILogger, string, Exception?> _compressingMessage =
-            LoggerMessage.Define<string>(LogLevel.Trace, new EventId(22, "CompressingMessage"), "Compressing message with '{MessageEncoding}' encoding.");
+        private static readonly Action<ILogger, Guid, string, Exception?> _compressingMessage =
+            LoggerMessage.Define<Guid, string>(LogLevel.Trace, new EventId(22, "CompressingMessage"), "CallId: '{CallId}'. Compressing message with '{MessageEncoding}' encoding.");
 
         private static readonly Action<ILogger, string, Exception?> _decompressingMessage =
             LoggerMessage.Define<string>(LogLevel.Trace, new EventId(23, "DecompressingMessage"), "Decompressing message with '{MessageEncoding}' encoding.");
@@ -98,65 +98,65 @@ namespace Grpc.Net.Client.Internal
         private static readonly Action<ILogger, TimeSpan, Exception?> _deadlineTimerRescheduled =
             LoggerMessage.Define<TimeSpan>(LogLevel.Trace, new EventId(25, "DeadlineTimerRescheduled"), "Deadline timer triggered but {Remaining} remaining before deadline exceeded. Deadline timer rescheduled.");
 
-        private static readonly Action<ILogger, Exception> _errorParsingTrailers =
-            LoggerMessage.Define(LogLevel.Error, new EventId(26, "ErrorParsingTrailers"), "Error parsing trailers.");
+        private static readonly Action<ILogger, Guid, Exception> _errorParsingTrailers =
+            LoggerMessage.Define<Guid>(LogLevel.Error, new EventId(26, "ErrorParsingTrailers"), "Error parsing trailers. CallId: '{CallId}'");
 
-        private static readonly Action<ILogger, Exception> _errorExceedingDeadline =
-            LoggerMessage.Define(LogLevel.Error, new EventId(27, "ErrorExceedingDeadline"), "Error exceeding deadline.");
+        private static readonly Action<ILogger, Guid, Exception> _errorExceedingDeadline =
+            LoggerMessage.Define<Guid>(LogLevel.Error, new EventId(27, "ErrorExceedingDeadline"), "Error exceeding deadline. CallId: '{CallId}'");
 
-        public static void StartingCall(ILogger logger, MethodType methodType, Uri uri)
+        public static void StartingCall(ILogger logger, Guid callId, Guid channelId, int attempt, MethodType methodType, Uri uri)
         {
-            _startingCall(logger, methodType, uri, null);
+            _startingCall(logger, callId, channelId, attempt, methodType, uri, null);
         }
 
-        public static void ResponseHeadersReceived(ILogger logger)
+        public static void ResponseHeadersReceived(ILogger logger, Guid callId)
         {
-            _responseHeadersReceived(logger, null);
+            _responseHeadersReceived(logger, callId, null);
         }
 
-        public static void GrpcStatusError(ILogger logger, StatusCode status, string message)
+        public static void GrpcStatusError(ILogger logger, Guid callId, StatusCode status, string message)
         {
-            _grpcStatusError(logger, status, message, null);
+            _grpcStatusError(logger, callId, status, message, null);
         }
 
-        public static void FinishedCall(ILogger logger)
+        public static void FinishedCall(ILogger logger, Guid callId)
         {
-            _finishedCall(logger, null);
+            _finishedCall(logger, callId, null);
         }
 
-        public static void StartingDeadlineTimeout(ILogger logger, TimeSpan deadlineTimeout)
+        public static void StartingDeadlineTimeout(ILogger logger, Guid callId, TimeSpan deadlineTimeout)
         {
-            _startingDeadlineTimeout(logger, deadlineTimeout, null);
+            _startingDeadlineTimeout(logger, callId, deadlineTimeout, null);
         }
 
-        public static void ErrorStartingCall(ILogger logger, Exception ex)
+        public static void ErrorStartingCall(ILogger logger, Guid callId, Exception ex)
         {
-            _errorStartingCall(logger, ex);
+            _errorStartingCall(logger, callId, ex);
         }
 
-        public static void DeadlineExceeded(ILogger logger)
+        public static void DeadlineExceeded(ILogger logger, Guid callId)
         {
-            _deadlineExceeded(logger, null);
+            _deadlineExceeded(logger, callId, null);
         }
 
-        public static void CanceledCall(ILogger logger)
+        public static void CanceledCall(ILogger logger, Guid callId)
         {
-            _canceledCall(logger, null);
+            _canceledCall(logger, callId, null);
         }
 
-        public static void MessageNotReturned(ILogger logger)
+        public static void MessageNotReturned(ILogger logger, Guid callId)
         {
-            _messageNotReturned(logger, null);
+            _messageNotReturned(logger, callId, null);
         }
 
-        public static void ErrorValidatingResponseHeaders(ILogger logger, Exception ex)
+        public static void ErrorValidatingResponseHeaders(ILogger logger, Guid callId, Exception ex)
         {
-            _errorValidatingResponseHeaders(logger, ex);
+            _errorValidatingResponseHeaders(logger, callId, ex);
         }
 
-        public static void ErrorFetchingGrpcStatus(ILogger logger, Exception ex)
+        public static void ErrorFetchingGrpcStatus(ILogger logger, Guid callId, Exception ex)
         {
-            _errorFetchingGrpcStatus(logger, ex);
+            _errorFetchingGrpcStatus(logger, callId, ex);
         }
 
         public static void CallCredentialsNotUsed(ILogger logger)
@@ -164,54 +164,54 @@ namespace Grpc.Net.Client.Internal
             _callCredentialsNotUsed(logger, null);
         }
 
-        public static void ReadingMessage(ILogger logger)
+        public static void ReadingMessage(ILogger logger, Guid callId, int msgId)
         {
-            _readingMessage(logger, null);
+            _readingMessage(logger, callId, msgId, null);
         }
 
-        public static void NoMessageReturned(ILogger logger)
+        public static void NoMessageReturned(ILogger logger, Guid callId, int msgId)
         {
-            _noMessageReturned(logger, null);
+            _noMessageReturned(logger, callId, msgId, null);
         }
 
-        public static void DeserializingMessage(ILogger logger, int messageLength, Type messageType)
+        public static void DeserializingMessage(ILogger logger, Guid callId, int msgId, int messageLength, Type messageType)
         {
-            _deserializingMessage(logger, messageLength, messageType, null);
+            _deserializingMessage(logger, callId, msgId, messageLength, messageType, null);
         }
 
-        public static void ReceivedMessage(ILogger logger)
+        public static void ReceivedMessage(ILogger logger, Guid callId, int msgId, int length, Type messageType)
         {
-            _receivedMessage(logger, null);
+            _receivedMessage(logger, callId, msgId, length, messageType, null);
         }
 
-        public static void ErrorReadingMessage(ILogger logger, Exception ex)
+        public static void ErrorReadingMessage(ILogger logger, Guid callId, int msgId, Exception ex)
         {
-            _errorReadingMessage(logger, ex);
+            _errorReadingMessage(logger, callId, msgId, ex);
         }
 
-        public static void SendingMessage(ILogger logger)
+        public static void SendingMessage(ILogger logger, Guid callId, int msgId)
         {
-            _sendingMessage(logger, null);
+            _sendingMessage(logger, callId, msgId, null);
         }
 
-        public static void MessageSent(ILogger logger)
+        public static void MessageSent(ILogger logger, Guid callId, int msgId)
         {
-            _messageSent(logger, null);
+            _messageSent(logger, callId, msgId, null);
         }
 
-        public static void ErrorSendingMessage(ILogger logger, Exception ex)
+        public static void ErrorSendingMessage(ILogger logger, Guid callId, int msgId, Exception ex)
         {
-            _errorSendingMessage(logger, ex);
+            _errorSendingMessage(logger, callId, msgId, ex);
         }
 
-        public static void SerializedMessage(ILogger logger, Type messageType, int messageLength)
+        public static void SerializedMessage(ILogger logger, Guid callId, Type messageType, int messageLength)
         {
-            _serializedMessage(logger, messageType, messageLength, null);
+            _serializedMessage(logger, callId, messageType, messageLength, null);
         }
 
-        public static void CompressingMessage(ILogger logger, string messageEncoding)
+        public static void CompressingMessage(ILogger logger, Guid callId, string messageEncoding)
         {
-            _compressingMessage(logger, messageEncoding, null);
+            _compressingMessage(logger, callId, messageEncoding, null);
         }
 
         public static void DecompressingMessage(ILogger logger, string messageEncoding)
@@ -229,14 +229,14 @@ namespace Grpc.Net.Client.Internal
             _deadlineTimerRescheduled(logger, remaining, null);
         }
 
-        public static void ErrorParsingTrailers(ILogger logger, Exception ex)
+        public static void ErrorParsingTrailers(ILogger logger, Guid callId, Exception ex)
         {
-            _errorParsingTrailers(logger, ex);
+            _errorParsingTrailers(logger, callId, ex);
         }
 
-        public static void ErrorExceedingDeadline(ILogger logger, Exception ex)
+        public static void ErrorExceedingDeadline(ILogger logger, Guid callId, Exception ex)
         {
-            _errorExceedingDeadline(logger, ex);
+            _errorExceedingDeadline(logger, callId, ex);
         }
     }
 }

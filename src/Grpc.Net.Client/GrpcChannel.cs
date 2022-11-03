@@ -77,6 +77,7 @@ namespace Grpc.Net.Client
         internal Dictionary<string, ICompressionProvider> CompressionProviders { get; }
         internal string MessageAcceptEncoding { get; }
         internal bool Disposed { get; private set; }
+        internal Guid Id { get; }
 
 #if SUPPORT_LOAD_BALANCING
         // Load balancing
@@ -102,6 +103,7 @@ namespace Grpc.Net.Client
         internal GrpcChannel(Uri address, GrpcChannelOptions channelOptions) : base(address.Authority)
         {
             _lock = new object();
+            Id = Guid.NewGuid();
             _methodInfoCache = new ConcurrentDictionary<IMethod, GrpcMethodInfo>();
 
             // Dispose the HTTP client/handler if...
@@ -138,7 +140,8 @@ namespace Grpc.Net.Client
                 LoggerFactory,
                 channelOptions.ResolveService<IBackoffPolicyFactory>(new ExponentialBackoffPolicyFactory(RandomGenerator, InitialReconnectBackoff, MaxReconnectBackoff)),
                 SubchannelTransportFactory,
-                ResolveLoadBalancerFactories(channelOptions));
+                ResolveLoadBalancerFactories(channelOptions),
+                this.Id);
             ConnectionManager.ConfigureBalancer(c => new ChildHandlerLoadBalancer(
                 c,
                 channelOptions.ServiceConfig,
@@ -643,6 +646,12 @@ namespace Grpc.Net.Client
             return ConnectionManager.WaitForStateChangedAsync(lastObservedState, waitForState: null, cancellationToken);
         }
 #endif
+
+        /// <inheritdoc/>
+        public override string ToString()
+        {
+            return this.Id.ToString();
+        }
 
         /// <summary>
         /// Releases the resources used by the <see cref="GrpcChannel"/> class.

@@ -31,6 +31,8 @@ namespace Grpc.Net.Client.Internal
 
         private GrpcCallSerializationContext? _serializationContext;
         private DefaultDeserializationContext? _deserializationContext;
+        private int requestMessageCounter;
+        private int responseMessageCounter;
 
         protected Metadata? Trailers { get; set; }
 
@@ -57,12 +59,18 @@ namespace Grpc.Net.Client.Internal
         public abstract Type RequestType { get; }
         public abstract Type ResponseType { get; }
 
+        public Guid Id { get; }
+
         protected GrpcCall(CallOptions options, GrpcChannel channel)
         {
             Options = options;
             Channel = channel;
             Logger = channel.LoggerFactory.CreateLogger(LoggerName);
+            Id = Guid.NewGuid();
         }
+
+        internal int NextRequestMessageIndex() => Interlocked.Increment(ref this.requestMessageCounter);
+        internal int NextResponseMessageIndex() => Interlocked.Increment(ref this.responseMessageCounter);
 
         internal RpcException CreateRpcException(Status status)
         {
@@ -79,7 +87,7 @@ namespace Grpc.Net.Client.Internal
             }
             catch (Exception ex)
             {
-                GrpcCallLog.ErrorParsingTrailers(Logger, ex);
+                GrpcCallLog.ErrorParsingTrailers(Logger, this.Id, ex);
             }
             return new RpcException(status, trailers ?? Metadata.Empty);
         }

@@ -57,7 +57,8 @@ namespace Grpc.Net.Client.Balancer.Internal
             ILoggerFactory loggerFactory,
             IBackoffPolicyFactory backoffPolicyFactory,
             ISubchannelTransportFactory subchannelTransportFactory,
-            LoadBalancerFactory[] loadBalancerFactories)
+            LoadBalancerFactory[] loadBalancerFactories,
+            Guid? channelId = default)
         {
             _lock = new object();
             _nextPickerTcs = new TaskCompletionSource<SubchannelPicker>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -72,6 +73,7 @@ namespace Grpc.Net.Client.Balancer.Internal
             DisableResolverServiceConfig = disableResolverServiceConfig;
             _subchannelTransportFactory = subchannelTransportFactory;
             LoadBalancerFactories = loadBalancerFactories;
+            this.ChannelId = channelId ?? Guid.Empty;
         }
 
         public ConnectivityState State { get; private set; }
@@ -80,6 +82,8 @@ namespace Grpc.Net.Client.Balancer.Internal
         public IBackoffPolicyFactory BackoffPolicyFactory { get; }
         public bool DisableResolverServiceConfig { get; }
         public LoadBalancerFactory[] LoadBalancerFactories { get; }
+
+        internal Guid ChannelId { get; }
 
         // For unit tests.
         internal IReadOnlyList<Subchannel> GetSubchannels()
@@ -275,7 +279,7 @@ namespace Grpc.Net.Client.Balancer.Internal
             {
                 if (State != state.ConnectivityState)
                 {
-                    ConnectionManagerLog.ChannelStateUpdated(Logger, state.ConnectivityState);
+                    ConnectionManagerLog.ChannelStateUpdated(Logger, this.ChannelId, state.ConnectivityState);
                     State = state.ConnectivityState;
 
                     // Iterate in reverse to reduce shifting items in the list as watchers are removed.
@@ -296,7 +300,7 @@ namespace Grpc.Net.Client.Balancer.Internal
 
                 if (!Equals(_picker, state.Picker))
                 {
-                    ConnectionManagerLog.ChannelPickerUpdated(Logger);
+                    ConnectionManagerLog.ChannelPickerUpdated(Logger, this.ChannelId);
                     _picker = state.Picker;
                     _pickerTask = Task.FromResult(state.Picker);
                     _nextPickerTcs.SetResult(state.Picker);
@@ -316,7 +320,7 @@ namespace Grpc.Net.Client.Balancer.Internal
             {
                 var currentPicker = await GetPickerAsync(previousPicker, cancellationToken).ConfigureAwait(false);
 
-                ConnectionManagerLog.PickStarted(Logger);
+                ConnectionManagerLog.PickStarted(Logger, this.ChannelId);
                 var result = currentPicker.Pick(context);
 
                 switch (result.Type)
@@ -327,28 +331,28 @@ namespace Grpc.Net.Client.Balancer.Internal
 
                         if (address != null)
                         {
-                            ConnectionManagerLog.PickResultSuccessful(Logger, subchannel.Id, address);
+                            ConnectionManagerLog.PickResultSuccessful(Logger, this.ChannelId, subchannel.Id, address);
                             return (subchannel, address, result.SubchannelCallTracker);
                         }
                         else
                         {
-                            ConnectionManagerLog.PickResultSubchannelNoCurrentAddress(Logger, subchannel.Id);
+                            ConnectionManagerLog.PickResultSubchannelNoCurrentAddress(Logger, this.ChannelId, subchannel.Id);
                             previousPicker = currentPicker;
                         }
                         break;
                     case PickResultType.Queue:
-                        ConnectionManagerLog.PickResultQueued(Logger);
+                        ConnectionManagerLog.PickResultQueued(Logger, this.ChannelId);
                         previousPicker = currentPicker;
                         break;
                     case PickResultType.Fail:
                         if (waitForReady)
                         {
-                            ConnectionManagerLog.PickResultFailureWithWaitForReady(Logger, result.Status);
+                            ConnectionManagerLog.PickResultFailureWithWaitForReady(Logger, this.ChannelId, result.Status);
                             previousPicker = currentPicker;
                         }
                         else
                         {
-                            ConnectionManagerLog.PickResultFailure(Logger, result.Status);
+                            ConnectionManagerLog.PickResultFailure(Logger, this.ChannelId,  result.Status);
                             throw new RpcException(result.Status);
                         }
                         break;
@@ -374,7 +378,7 @@ namespace Grpc.Net.Client.Balancer.Internal
                 }
                 else
                 {
-                    ConnectionManagerLog.PickWaiting(Logger);
+                    ConnectionManagerLog.PickWaiting(Logger, this.ChannelId);
 
                     return _nextPickerTcs.Task.WaitAsync(cancellationToken);
                 }
@@ -461,32 +465,32 @@ namespace Grpc.Net.Client.Balancer.Internal
         private static readonly Action<ILogger, Exception?> _resolverServiceConfigNotUsed =
             LoggerMessage.Define(LogLevel.Debug, new EventId(2, "ResolverServiceConfigNotUsed"), "Service config returned by the resolver not used.");
 
-        private static readonly Action<ILogger, ConnectivityState, Exception?> _channelStateUpdated =
-            LoggerMessage.Define<ConnectivityState>(LogLevel.Debug, new EventId(3, "ChannelStateUpdated"), "Channel state updated to {State}.");
+        private static readonly Action<ILogger, Guid, ConnectivityState, Exception?> _channelStateUpdated =
+            LoggerMessage.Define<Guid, ConnectivityState>(LogLevel.Debug, new EventId(3, "ChannelStateUpdated"), "ChannelId: '{ChannelId}'. Channel state updated to {State}.");
 
-        private static readonly Action<ILogger, Exception?> _channelPickerUpdated =
-            LoggerMessage.Define(LogLevel.Debug, new EventId(4, "ChannelPickerUpdated"), "Channel picker updated.");
+        private static readonly Action<ILogger, Guid, Exception?> _channelPickerUpdated =
+            LoggerMessage.Define<Guid>(LogLevel.Debug, new EventId(4, "ChannelPickerUpdated"), "ChannelId: '{ChannelId}'. Channel picker updated.");
 
-        private static readonly Action<ILogger, Exception?> _pickStarted =
-            LoggerMessage.Define(LogLevel.Trace, new EventId(5, "PickStarted"), "Pick started.");
+        private static readonly Action<ILogger, Guid, Exception?> _pickStarted =
+            LoggerMessage.Define<Guid>(LogLevel.Trace, new EventId(5, "PickStarted"), "ChannelId: '{ChannelId}'. Pick started.");
 
-        private static readonly Action<ILogger, int, BalancerAddress, Exception?> _pickResultSuccessful =
-            LoggerMessage.Define<int, BalancerAddress>(LogLevel.Debug, new EventId(6, "PickResultSuccessful"), "Successfully picked subchannel id '{SubchannelId}' with address {CurrentAddress}.");
+        private static readonly Action<ILogger, Guid, int, BalancerAddress, Exception?> _pickResultSuccessful =
+            LoggerMessage.Define<Guid, int, BalancerAddress>(LogLevel.Debug, new EventId(6, "PickResultSuccessful"), "ChannelId: '{ChannelId}'. Successfully picked subchannel id '{SubchannelId}' with address {CurrentAddress}.");
 
-        private static readonly Action<ILogger, int, Exception?> _pickResultSubchannelNoCurrentAddress =
-            LoggerMessage.Define<int>(LogLevel.Debug, new EventId(7, "PickResultSubchannelNoCurrentAddress"), "Picked subchannel id '{SubchannelId}' doesn't have a current address.");
+        private static readonly Action<ILogger, Guid, int, Exception?> _pickResultSubchannelNoCurrentAddress =
+            LoggerMessage.Define<Guid, int>(LogLevel.Debug, new EventId(7, "PickResultSubchannelNoCurrentAddress"), "ChannelId: '{ChannelId}'. Picked subchannel id '{SubchannelId}' doesn't have a current address.");
 
-        private static readonly Action<ILogger, Exception?> _pickResultQueued =
-            LoggerMessage.Define(LogLevel.Debug, new EventId(8, "PickResultQueued"), "Picked queued.");
+        private static readonly Action<ILogger, Guid, Exception?> _pickResultQueued =
+            LoggerMessage.Define<Guid>(LogLevel.Debug, new EventId(8, "PickResultQueued"), "ChannelId: '{ChannelId}'. Picked queued.");
 
-        private static readonly Action<ILogger, Status, Exception?> _pickResultFailure =
-            LoggerMessage.Define<Status>(LogLevel.Debug, new EventId(9, "PickResultFailure"), "Picked failure with status: {Status}");
+        private static readonly Action<ILogger, Guid, Status, Exception?> _pickResultFailure =
+            LoggerMessage.Define<Guid, Status>(LogLevel.Debug, new EventId(9, "PickResultFailure"), "ChannelId: '{ChannelId}'. Picked failure with status: {Status}");
 
-        private static readonly Action<ILogger, Status, Exception?> _pickResultFailureWithWaitForReady =
-            LoggerMessage.Define<Status>(LogLevel.Debug, new EventId(10, "PickResultFailureWithWaitForReady"), "Picked failure with status: {Status}. Retrying because wait for ready is enabled.");
+        private static readonly Action<ILogger, Guid, Status, Exception?> _pickResultFailureWithWaitForReady =
+            LoggerMessage.Define<Guid, Status>(LogLevel.Debug, new EventId(10, "PickResultFailureWithWaitForReady"), "ChannelId: '{ChannelId}'. Picked failure with status: {Status}. Retrying because wait for ready is enabled.");
 
-        private static readonly Action<ILogger, Exception?> _pickWaiting =
-            LoggerMessage.Define(LogLevel.Trace, new EventId(11, "PickWaiting"), "Waiting for a new picker.");
+        private static readonly Action<ILogger, Guid, Exception?> _pickWaiting =
+            LoggerMessage.Define<Guid>(LogLevel.Trace, new EventId(11, "PickWaiting"), "ChannelId: '{ChannelId}'. Waiting for a new picker.");
 
         private static readonly Action<ILogger, Status, Exception?> _resolverServiceConfigFallback =
             LoggerMessage.Define<Status>(LogLevel.Debug, new EventId(12, "ResolverServiceConfigFallback"), "Falling back to previously loaded service config. Resolver failure when retreiving or parsing service config with status: {Status}");
@@ -505,49 +509,49 @@ namespace Grpc.Net.Client.Balancer.Internal
             _resolverServiceConfigNotUsed(logger, null);
         }
 
-        public static void ChannelStateUpdated(ILogger logger, ConnectivityState connectivityState)
+        public static void ChannelStateUpdated(ILogger logger, Guid channelId, ConnectivityState connectivityState)
         {
-            _channelStateUpdated(logger, connectivityState, null);
+            _channelStateUpdated(logger, channelId, connectivityState, null);
         }
 
-        public static void ChannelPickerUpdated(ILogger logger)
+        public static void ChannelPickerUpdated(ILogger logger, Guid channelId)
         {
-            _channelPickerUpdated(logger, null);
+            _channelPickerUpdated(logger, channelId, null);
         }
 
-        public static void PickStarted(ILogger logger)
+        public static void PickStarted(ILogger logger, Guid channelId)
         {
-            _pickStarted(logger, null);
+            _pickStarted(logger, channelId, null);
         }
 
-        public static void PickResultSuccessful(ILogger logger, int subchannelId, BalancerAddress currentAddress)
+        public static void PickResultSuccessful(ILogger logger, Guid channelId, int subchannelId, BalancerAddress currentAddress)
         {
-            _pickResultSuccessful(logger, subchannelId, currentAddress, null);
+            _pickResultSuccessful(logger, channelId, subchannelId, currentAddress, null);
         }
 
-        public static void PickResultSubchannelNoCurrentAddress(ILogger logger, int subchannelId)
+        public static void PickResultSubchannelNoCurrentAddress(ILogger logger, Guid channelId, int subchannelId)
         {
-            _pickResultSubchannelNoCurrentAddress(logger, subchannelId, null);
+            _pickResultSubchannelNoCurrentAddress(logger, channelId, subchannelId, null);
         }
 
-        public static void PickResultQueued(ILogger logger)
+        public static void PickResultQueued(ILogger logger, Guid channelId)
         {
-            _pickResultQueued(logger, null);
+            _pickResultQueued(logger, channelId, null);
         }
 
-        public static void PickResultFailure(ILogger logger, Status status)
+        public static void PickResultFailure(ILogger logger, Guid channelId, Status status)
         {
-            _pickResultFailure(logger, status, null);
+            _pickResultFailure(logger, channelId, status, null);
         }
 
-        public static void PickResultFailureWithWaitForReady(ILogger logger, Status status)
+        public static void PickResultFailureWithWaitForReady(ILogger logger, Guid channelId, Status status)
         {
-            _pickResultFailureWithWaitForReady(logger, status, null);
+            _pickResultFailureWithWaitForReady(logger, channelId, status, null);
         }
 
-        public static void PickWaiting(ILogger logger)
+        public static void PickWaiting(ILogger logger, Guid channelId)
         {
-            _pickWaiting(logger, null);
+            _pickWaiting(logger, channelId, null);
         }
 
         public static void ResolverServiceConfigFallback(ILogger logger, Status status)

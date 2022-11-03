@@ -144,7 +144,7 @@ namespace Grpc.Net.Client.Balancer
                     // remaining in this collection at the end will be disposed.
                     currentSubchannels.RemoveAt(i.GetValueOrDefault());
 
-                    SubchannelLog.SubchannelPreserved(_logger, newOrCurrentSubchannel.Subchannel.Id, address);
+                    SubchannelLog.SubchannelPreserved(_logger, newOrCurrentSubchannel.Subchannel.ChannelId, newOrCurrentSubchannel.Subchannel.Id, address);
                 }
                 else
                 {

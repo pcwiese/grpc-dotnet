@@ -56,10 +56,11 @@ namespace Grpc.Net.Client
             where TResponse : class
         {
             byte[]? buffer = null;
+            var msgId = call.NextResponseMessageIndex();
 
             try
             {
-                GrpcCallLog.ReadingMessage(call.Logger);
+                GrpcCallLog.ReadingMessage(call.Logger, call.Id, msgId);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // Buffer is used to read header, then message content.
@@ -83,7 +84,7 @@ namespace Grpc.Net.Client
                 {
                     if (received == 0)
                     {
-                        GrpcCallLog.NoMessageReturned(call.Logger);
+                        GrpcCallLog.NoMessageReturned(call.Logger, call.Id, msgId);
                         return default;
                     }
 
@@ -143,7 +144,7 @@ namespace Grpc.Net.Client
                     payload = new ReadOnlySequence<byte>(buffer, 0, length);
                 }
 
-                GrpcCallLog.DeserializingMessage(call.Logger, length, typeof(TResponse));
+                GrpcCallLog.DeserializingMessage(call.Logger, call.Id, msgId, length, typeof(TResponse));
 
                 call.DeserializationContext.SetPayload(payload);
                 var message = deserializer(call.DeserializationContext);
@@ -159,7 +160,7 @@ namespace Grpc.Net.Client
                     }
                 }
 
-                GrpcCallLog.ReceivedMessage(call.Logger);
+                GrpcCallLog.ReceivedMessage(call.Logger, call.Id, msgId, length, typeof(TResponse));
                 return message;
             }
             catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
@@ -175,7 +176,7 @@ namespace Grpc.Net.Client
             catch (Exception ex) when (!(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
                 // Don't write error when user cancels read
-                GrpcCallLog.ErrorReadingMessage(call.Logger, ex);
+                GrpcCallLog.ErrorReadingMessage(call.Logger, call.Id, msgId, ex);
                 throw;
             }
             finally
@@ -291,13 +292,15 @@ namespace Grpc.Net.Client
             Action<TMessage, SerializationContext> serializer,
             CallOptions callOptions)
         {
+            var msgId = call.NextRequestMessageIndex();
+
             // Sync relevant changes here with other WriteMessageAsync
             var serializationContext = call.SerializationContext;
             serializationContext.CallOptions = callOptions;
             serializationContext.Initialize();
             try
             {
-                GrpcCallLog.SendingMessage(call.Logger);
+                GrpcCallLog.SendingMessage(call.Logger, call.Id, msgId);
 
                 // Serialize message first. Need to know size to prefix the length in the header
                 serializer(message, serializationContext);
@@ -306,11 +309,11 @@ namespace Grpc.Net.Client
                 // https://github.com/dotnet/runtime/issues/35184#issuecomment-626304981
                 await stream.WriteAsync(serializationContext.GetWrittenPayload(), call.CancellationToken).ConfigureAwait(false);
 
-                GrpcCallLog.MessageSent(call.Logger);
+                GrpcCallLog.MessageSent(call.Logger, call.Id, msgId);
             }
             catch (Exception ex)
             {
-                GrpcCallLog.ErrorSendingMessage(call.Logger, ex);
+                GrpcCallLog.ErrorSendingMessage(call.Logger, call.Id, msgId, ex);
                 throw;
             }
             finally
@@ -325,9 +328,11 @@ namespace Grpc.Net.Client
             ReadOnlyMemory<byte> data,
             CancellationToken cancellationToken)
         {
+            var msgId = call.NextRequestMessageIndex();
+
             try
             {
-                GrpcCallLog.SendingMessage(call.Logger);
+                GrpcCallLog.SendingMessage(call.Logger, call.Id, msgId);
 
                 try
                 {
@@ -341,11 +346,11 @@ namespace Grpc.Net.Client
                     throw new OperationCanceledException();
                 }
 
-                GrpcCallLog.MessageSent(call.Logger);
+                GrpcCallLog.MessageSent(call.Logger, call.Id, msgId);
             }
             catch (Exception ex)
             {
-                GrpcCallLog.ErrorSendingMessage(call.Logger, ex);
+                GrpcCallLog.ErrorSendingMessage(call.Logger, call.Id, msgId, ex);
                 throw;
             }
         }

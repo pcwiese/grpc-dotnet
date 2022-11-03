@@ -146,7 +146,7 @@ namespace Grpc.Net.Client.Internal
                 case InternalState.Initialized:
                     _state = InternalState.CompleteArray;
 
-                    GrpcCallLog.SerializedMessage(_call.Logger, _call.RequestType, payload.Length);
+                    GrpcCallLog.SerializedMessage(_call.Logger, _call.Id, _call.RequestType, payload.Length);
                     WriteMessage(payload);
                     break;
                 default:
@@ -240,12 +240,12 @@ namespace Grpc.Net.Client.Internal
 
                         var data = _bufferWriter.WrittenSpan;
 
-                        GrpcCallLog.SerializedMessage(_call.Logger, _call.RequestType, data.Length);
+                        GrpcCallLog.SerializedMessage(_call.Logger, _call.Id, _call.RequestType, data.Length);
                         WriteMessage(data);
                     }
                     else
                     {
-                        GrpcCallLog.SerializedMessage(_call.Logger, _call.RequestType, _payloadLength.GetValueOrDefault());
+                        GrpcCallLog.SerializedMessage(_call.Logger, _call.Id, _call.RequestType, _payloadLength.GetValueOrDefault());
                     }
                     break;
                 default:
@@ -276,7 +276,7 @@ namespace Grpc.Net.Client.Internal
         {
             CompatibilityHelpers.Assert(_compressionProvider != null, "Compression provider is not null to get here.");
 
-            GrpcCallLog.CompressingMessage(_call.Logger, _compressionProvider.EncodingName);
+            GrpcCallLog.CompressingMessage(_call.Logger, _call.Id, _compressionProvider.EncodingName);
 
             var output = new NonDisposableMemoryStream();
 

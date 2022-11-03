@@ -23,7 +23,6 @@ using Grpc.Core;
 using Grpc.Net.Client.Internal.Http;
 using Grpc.Shared;
 using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
 #if SUPPORT_LOAD_BALANCING
 using Grpc.Net.Client.Balancer.Internal;
 #endif
@@ -414,7 +413,7 @@ namespace Grpc.Net.Client.Internal
             // but there is no adverse effect other than an extra log message
             if (!_callCts.IsCancellationRequested)
             {
-                GrpcCallLog.CanceledCall(Logger);
+                GrpcCallLog.CanceledCall(Logger, this.Id);
 
                 // Cancel in-progress HttpClient.SendAsync and Stream.ReadAsync tasks.
                 // Cancel will send RST_STREAM if HttpClient.SendAsync isn't complete.
@@ -489,12 +488,12 @@ namespace Grpc.Net.Client.Internal
                         }
                         else
                         {
-                            GrpcCallLog.ErrorStartingCall(Logger, ex);
+                            GrpcCallLog.ErrorStartingCall(Logger, this.Id, ex);
                             throw;
                         }
                     }
 
-                    GrpcCallLog.ResponseHeadersReceived(Logger);
+                    GrpcCallLog.ResponseHeadersReceived(Logger, this.Id);
                     status = ValidateHeaders(HttpResponse, out var trailers);
                     if (trailers != null)
                     {
@@ -515,7 +514,7 @@ namespace Grpc.Net.Client.Internal
                             {
                                 // The server should never return StatusCode.OK in the header for a unary call.
                                 // If it does then throw an error that no message was returned from the server.
-                                GrpcCallLog.MessageNotReturned(Logger);
+                                GrpcCallLog.MessageNotReturned(Logger, this.Id);
 
                                 // Change the status code to a more accurate status.
                                 // This is consistent with Grpc.Core client behavior.
@@ -554,7 +553,7 @@ namespace Grpc.Net.Client.Internal
 
                             if (message == null)
                             {
-                                GrpcCallLog.MessageNotReturned(Logger);
+                                GrpcCallLog.MessageNotReturned(Logger, this.Id);
 
                                 if (status.Value.StatusCode == StatusCode.OK)
                                 {
@@ -759,7 +758,7 @@ namespace Grpc.Net.Client.Internal
 
         private (bool diagnosticSourceEnabled, Activity? activity) InitializeCall(HttpRequestMessage request, TimeSpan? timeout)
         {
-            GrpcCallLog.StartingCall(Logger, Method.Type, request.RequestUri!);
+            GrpcCallLog.StartingCall(Logger, this.Id, this.Channel.Id, this._attemptCount, Method.Type, request.RequestUri!);
             GrpcEventSource.Log.CallStart(Method.FullName);
 
             // Deadline will cancel the call CTS.
@@ -777,7 +776,7 @@ namespace Grpc.Net.Client.Internal
                 }
                 else
                 {
-                    GrpcCallLog.StartingDeadlineTimeout(Logger, timeout.Value);
+                    GrpcCallLog.StartingDeadlineTimeout(Logger, this.Id, timeout.Value);
 
                     var dueTime = CommonGrpcProtocolHelpers.GetTimerDueTime(timeout.Value, Channel.MaxTimerDueTime);
                     _deadlineTimer = new Timer(DeadlineExceededCallback, null, dueTime, Timeout.Infinite);
@@ -834,7 +833,7 @@ namespace Grpc.Net.Client.Internal
                     {
                         if (IsDeadlineExceededUnsynchronized())
                         {
-                            GrpcCallLog.DeadlineExceeded(Logger);
+                            GrpcCallLog.DeadlineExceeded(Logger, this.Id);
                             GrpcEventSource.Log.CallDeadlineExceeded();
 
                             _deadline = DateTime.MaxValue;
@@ -842,10 +841,10 @@ namespace Grpc.Net.Client.Internal
                     }
                 }
 
-                GrpcCallLog.GrpcStatusError(Logger, status.StatusCode, status.Detail);
+                GrpcCallLog.GrpcStatusError(Logger, this.Id, status.StatusCode, status.Detail);
                 GrpcEventSource.Log.CallFailed(status.StatusCode);
             }
-            GrpcCallLog.FinishedCall(Logger);
+            GrpcCallLog.FinishedCall(Logger, this.Id);
             GrpcEventSource.Log.CallStop();
 
             // Activity needs to be stopped in the same execution context it was started
@@ -1040,7 +1039,7 @@ namespace Grpc.Net.Client.Internal
             catch (Exception ex)
             {
                 // Ensure exceptions are never thrown from a timer.
-                GrpcCallLog.ErrorExceedingDeadline(Logger, ex);
+                GrpcCallLog.ErrorExceedingDeadline(Logger, this.Id, ex);
             }
         }
 
@@ -1048,7 +1047,7 @@ namespace Grpc.Net.Client.Internal
         {
             Debug.Assert(Monitor.IsEntered(this));
 
-            GrpcCallLog.DeadlineExceeded(Logger);
+            GrpcCallLog.DeadlineExceeded(Logger, this.Id);
             GrpcEventSource.Log.CallDeadlineExceeded();
 
             // Set _deadline to DateTime.MaxValue to signal that deadline has been exceeded.

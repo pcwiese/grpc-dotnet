@@ -62,6 +62,7 @@ namespace Grpc.Net.Client.Balancer.Internal
         private BalancerAddress? _initialSocketAddress;
         private bool _disposed;
         private BalancerAddress? _currentAddress;
+        private Guid channelId;
 
         public SocketConnectivitySubchannelTransport(Subchannel subchannel, TimeSpan socketPingInterval, TimeSpan? connectTimeout, ILoggerFactory loggerFactory)
         {
@@ -71,6 +72,7 @@ namespace Grpc.Net.Client.Balancer.Internal
             ConnectTimeout = connectTimeout;
             _activeStreams = new List<ActiveStream>();
             _socketConnectedTimer = new Timer(OnCheckSocketConnection, state: null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            this.channelId = _subchannel.ChannelId;
         }
 
         public object Lock => _subchannel.Lock;
@@ -136,9 +138,9 @@ namespace Grpc.Net.Client.Balancer.Internal
 
                 try
                 {
-                    SocketConnectivitySubchannelTransportLog.ConnectingSocket(_logger, _subchannel.Id, currentAddress);
+                    SocketConnectivitySubchannelTransportLog.ConnectingSocket(_logger, this.channelId, _subchannel.Id, currentAddress);
                     await socket.ConnectAsync(currentAddress.EndPoint, context.CancellationToken).ConfigureAwait(false);
-                    SocketConnectivitySubchannelTransportLog.ConnectedSocket(_logger, _subchannel.Id, currentAddress);
+                    SocketConnectivitySubchannelTransportLog.ConnectedSocket(_logger, this.channelId, _subchannel.Id, currentAddress);
 
                     lock (Lock)
                     {
@@ -154,7 +156,7 @@ namespace Grpc.Net.Client.Balancer.Internal
                 }
                 catch (Exception ex)
                 {
-                    SocketConnectivitySubchannelTransportLog.ErrorConnectingSocket(_logger, _subchannel.Id, currentAddress, ex);
+                    SocketConnectivitySubchannelTransportLog.ErrorConnectingSocket(_logger, this.channelId, _subchannel.Id, currentAddress, ex);
 
                     if (firstConnectionError == null)
                     {
@@ -205,7 +207,7 @@ namespace Grpc.Net.Client.Balancer.Internal
                     try
                     {
                         // Check the socket is still valid by doing a zero byte send.
-                        SocketConnectivitySubchannelTransportLog.CheckingSocket(_logger, _subchannel.Id, _initialSocketAddress);
+                        SocketConnectivitySubchannelTransportLog.CheckingSocket(_logger, this.channelId, _subchannel.Id, _initialSocketAddress);
                         await socket.SendAsync(Array.Empty<byte>(), SocketFlags.None).ConfigureAwait(false);
 
                         // Also poll socket to check if it can be read from.
@@ -215,7 +217,7 @@ namespace Grpc.Net.Client.Balancer.Internal
                     {
                         closeSocket = true;
                         sendException = ex;
-                        SocketConnectivitySubchannelTransportLog.ErrorCheckingSocket(_logger, _subchannel.Id, _initialSocketAddress, ex);
+                        SocketConnectivitySubchannelTransportLog.ErrorCheckingSocket(_logger, this.channelId, _subchannel.Id, _initialSocketAddress, ex);
                     }
 
                     if (closeSocket)
@@ -238,13 +240,13 @@ namespace Grpc.Net.Client.Balancer.Internal
             }
             catch (Exception ex)
             {
-                SocketConnectivitySubchannelTransportLog.ErrorSocketTimer(_logger, _subchannel.Id, ex);
+                SocketConnectivitySubchannelTransportLog.ErrorSocketTimer(_logger, this.channelId, _subchannel.Id, ex);
             }
         }
 
         public async ValueTask<Stream> GetStreamAsync(BalancerAddress address, CancellationToken cancellationToken)
         {
-            SocketConnectivitySubchannelTransportLog.CreatingStream(_logger, _subchannel.Id, address);
+            SocketConnectivitySubchannelTransportLog.CreatingStream(_logger, this.channelId, _subchannel.Id, address);
 
             Socket? socket = null;
             lock (Lock)
@@ -316,7 +318,7 @@ namespace Grpc.Net.Client.Balancer.Internal
                         if (t.Stream == streamWrapper)
                         {
                             _activeStreams.RemoveAt(i);
-                            SocketConnectivitySubchannelTransportLog.DisposingStream(_logger, _subchannel.Id, t.Address);
+                            SocketConnectivitySubchannelTransportLog.DisposingStream(_logger, this.channelId, _subchannel.Id, t.Address);
 
                             // If the last active streams is removed then there is no active connection.
                             disconnect = _activeStreams.Count == 0;
@@ -338,7 +340,7 @@ namespace Grpc.Net.Client.Balancer.Internal
             catch (Exception ex)
             {
                 // Don't throw error to Stream.Dispose() caller.
-                SocketConnectivitySubchannelTransportLog.ErrorOnDisposingStream(_logger, _subchannel.Id, ex);
+                SocketConnectivitySubchannelTransportLog.ErrorOnDisposingStream(_logger, this.channelId, _subchannel.Id, ex);
             }
         }
 
@@ -351,7 +353,7 @@ namespace Grpc.Net.Client.Balancer.Internal
                     return;
                 }
 
-                SocketConnectivitySubchannelTransportLog.DisposingTransport(_logger, _subchannel.Id);
+                SocketConnectivitySubchannelTransportLog.DisposingTransport(_logger, this.channelId, _subchannel.Id);
 
                 DisconnectUnsynchronized();
 
@@ -363,84 +365,84 @@ namespace Grpc.Net.Client.Balancer.Internal
 
     internal static class SocketConnectivitySubchannelTransportLog
     {
-        private static readonly Action<ILogger, int, BalancerAddress, Exception?> _connectingSocket =
-            LoggerMessage.Define<int, BalancerAddress>(LogLevel.Trace, new EventId(1, "ConnectingSocket"), "Subchannel id '{SubchannelId}' connecting socket to {Address}.");
+        private static readonly Action<ILogger, Guid, int, BalancerAddress, Exception?> _connectingSocket =
+            LoggerMessage.Define<Guid, int, BalancerAddress>(LogLevel.Trace, new EventId(1, "ConnectingSocket"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' connecting socket to {Address}.");
 
-        private static readonly Action<ILogger, int, BalancerAddress, Exception?> _connectedSocket =
-            LoggerMessage.Define<int, BalancerAddress>(LogLevel.Debug, new EventId(2, "ConnectedSocket"), "Subchannel id '{SubchannelId}' connected to socket {Address}.");
+        private static readonly Action<ILogger, Guid, int, BalancerAddress, Exception?> _connectedSocket =
+            LoggerMessage.Define<Guid, int, BalancerAddress>(LogLevel.Debug, new EventId(2, "ConnectedSocket"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' connected to socket {Address}.");
 
-        private static readonly Action<ILogger, int, BalancerAddress, Exception?> _errorConnectingSocket =
-            LoggerMessage.Define<int, BalancerAddress>(LogLevel.Debug, new EventId(3, "ErrorConnectingSocket"), "Subchannel id '{SubchannelId}' error connecting to socket {Address}.");
+        private static readonly Action<ILogger, Guid, int, BalancerAddress, Exception?> _errorConnectingSocket =
+            LoggerMessage.Define<Guid, int, BalancerAddress>(LogLevel.Debug, new EventId(3, "ErrorConnectingSocket"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' error connecting to socket {Address}.");
 
-        private static readonly Action<ILogger, int, BalancerAddress, Exception?> _checkingSocket =
-            LoggerMessage.Define<int, BalancerAddress>(LogLevel.Trace, new EventId(4, "CheckingSocket"), "Subchannel id '{SubchannelId}' checking socket {Address}.");
+        private static readonly Action<ILogger, Guid, int, BalancerAddress, Exception?> _checkingSocket =
+            LoggerMessage.Define<Guid, int, BalancerAddress>(LogLevel.Trace, new EventId(4, "CheckingSocket"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' checking socket {Address}.");
 
-        private static readonly Action<ILogger, int, BalancerAddress, Exception?> _errorCheckingSocket =
-            LoggerMessage.Define<int, BalancerAddress>(LogLevel.Debug, new EventId(5, "ErrorCheckingSocket"), "Subchannel id '{SubchannelId}' error checking socket {Address}.");
+        private static readonly Action<ILogger, Guid, int, BalancerAddress, Exception?> _errorCheckingSocket =
+            LoggerMessage.Define<Guid, int, BalancerAddress>(LogLevel.Debug, new EventId(5, "ErrorCheckingSocket"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' error checking socket {Address}.");
 
-        private static readonly Action<ILogger, int, Exception?> _errorSocketTimer =
-            LoggerMessage.Define<int>(LogLevel.Error, new EventId(6, "ErrorSocketTimer"), "Subchannel id '{SubchannelId}' unexpected error in check socket timer.");
+        private static readonly Action<ILogger, Guid, int, Exception?> _errorSocketTimer =
+            LoggerMessage.Define<Guid, int>(LogLevel.Error, new EventId(6, "ErrorSocketTimer"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' unexpected error in check socket timer.");
 
-        private static readonly Action<ILogger, int, BalancerAddress, Exception?> _creatingStream =
-            LoggerMessage.Define<int, BalancerAddress>(LogLevel.Trace, new EventId(7, "CreatingStream"), "Subchannel id '{SubchannelId}' creating stream for {Address}.");
+        private static readonly Action<ILogger, Guid, int, BalancerAddress, Exception?> _creatingStream =
+            LoggerMessage.Define<Guid, int, BalancerAddress>(LogLevel.Trace, new EventId(7, "CreatingStream"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' creating stream for {Address}.");
 
-        private static readonly Action<ILogger, int, BalancerAddress, Exception?> _disposingStream =
-            LoggerMessage.Define<int, BalancerAddress>(LogLevel.Trace, new EventId(8, "DisposingStream"), "Subchannel id '{SubchannelId}' disposing stream for {Address}.");
+        private static readonly Action<ILogger, Guid, int, BalancerAddress, Exception?> _disposingStream =
+            LoggerMessage.Define<Guid, int, BalancerAddress>(LogLevel.Trace, new EventId(8, "DisposingStream"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' disposing stream for {Address}.");
 
-        private static readonly Action<ILogger, int, Exception?> _disposingTransport =
-            LoggerMessage.Define<int>(LogLevel.Trace, new EventId(9, "DisposingTransport"), "Subchannel id '{SubchannelId}' disposing transport.");
+        private static readonly Action<ILogger, Guid, int, Exception?> _disposingTransport =
+            LoggerMessage.Define<Guid, int>(LogLevel.Trace, new EventId(9, "DisposingTransport"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' disposing transport.");
 
-        private static readonly Action<ILogger, int, Exception> _errorOnDisposingStream =
-            LoggerMessage.Define<int>(LogLevel.Error, new EventId(10, "ErrorOnDisposingStream"), "Subchannel id '{SubchannelId}' unexpected error when reacting to transport stream dispose.");
+        private static readonly Action<ILogger, Guid, int, Exception> _errorOnDisposingStream =
+            LoggerMessage.Define<Guid, int>(LogLevel.Error, new EventId(10, "ErrorOnDisposingStream"), "ChannelId: '{ChannelId}', Subchannel id '{SubchannelId}' unexpected error when reacting to transport stream dispose.");
 
-        public static void ConnectingSocket(ILogger logger, int subchannelId, BalancerAddress address)
+        public static void ConnectingSocket(ILogger logger, Guid channelId, int subchannelId, BalancerAddress address)
         {
-            _connectingSocket(logger, subchannelId, address, null);
+            _connectingSocket(logger, channelId, subchannelId, address, null);
         }
 
-        public static void ConnectedSocket(ILogger logger, int subchannelId, BalancerAddress address)
+        public static void ConnectedSocket(ILogger logger, Guid channelId, int subchannelId, BalancerAddress address)
         {
-            _connectedSocket(logger, subchannelId, address, null);
+            _connectedSocket(logger, channelId, subchannelId, address, null);
         }
 
-        public static void ErrorConnectingSocket(ILogger logger, int subchannelId, BalancerAddress address, Exception ex)
+        public static void ErrorConnectingSocket(ILogger logger, Guid channelId, int subchannelId, BalancerAddress address, Exception ex)
         {
-            _errorConnectingSocket(logger, subchannelId, address, ex);
+            _errorConnectingSocket(logger, channelId, subchannelId, address, ex);
         }
 
-        public static void CheckingSocket(ILogger logger, int subchannelId, BalancerAddress address)
+        public static void CheckingSocket(ILogger logger, Guid channelId, int subchannelId, BalancerAddress address)
         {
-            _checkingSocket(logger, subchannelId, address, null);
+            _checkingSocket(logger, channelId, subchannelId, address, null);
         }
 
-        public static void ErrorCheckingSocket(ILogger logger, int subchannelId, BalancerAddress address, Exception ex)
+        public static void ErrorCheckingSocket(ILogger logger, Guid channelId, int subchannelId, BalancerAddress address, Exception ex)
         {
-            _errorCheckingSocket(logger, subchannelId, address, ex);
+            _errorCheckingSocket(logger, channelId, subchannelId, address, ex);
         }
 
-        public static void ErrorSocketTimer(ILogger logger, int subchannelId, Exception ex)
+        public static void ErrorSocketTimer(ILogger logger, Guid channelId, int subchannelId, Exception ex)
         {
-            _errorSocketTimer(logger, subchannelId, ex);
+            _errorSocketTimer(logger, channelId, subchannelId, ex);
         }
 
-        public static void CreatingStream(ILogger logger, int subchannelId, BalancerAddress address)
+        public static void CreatingStream(ILogger logger, Guid channelId, int subchannelId, BalancerAddress address)
         {
-            _creatingStream(logger, subchannelId, address, null);
+            _creatingStream(logger, channelId, subchannelId, address, null);
         }
 
-        public static void DisposingStream(ILogger logger, int subchannelId, BalancerAddress address)
+        public static void DisposingStream(ILogger logger, Guid channelId, int subchannelId, BalancerAddress address)
         {
-            _disposingStream(logger, subchannelId, address, null);
+            _disposingStream(logger, channelId, subchannelId, address, null);
         }
 
-        public static void DisposingTransport(ILogger logger, int subchannelId)
+        public static void DisposingTransport(ILogger logger, Guid channelId, int subchannelId)
         {
-            _disposingTransport(logger, subchannelId, null);
+            _disposingTransport(logger, channelId, subchannelId, null);
         }
 
-        public static void ErrorOnDisposingStream(ILogger logger, int subchannelId, Exception ex)
+        public static void ErrorOnDisposingStream(ILogger logger, Guid channelId, int subchannelId, Exception ex)
         {
-            _errorOnDisposingStream(logger, subchannelId, ex);
+            _errorOnDisposingStream(logger, channelId, subchannelId, ex);
         }
     }
 #endif
